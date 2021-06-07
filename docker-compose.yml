@@ -1,0 +1,10 @@
+services:
+  web:
+    build: .
+    ports:
+      - "5000:80"
+    volumes:
+    - .:/app
+    environment:
+      - LOG_LEVEL=INFO
+      - ENVIRONMENT_NAME=local_docker

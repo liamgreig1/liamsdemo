@@ -1,0 +1,229 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: ECS Fargate Stack for Project liamsdemo
+Parameters:
+  VPC:
+    Type: AWS::EC2::VPC::Id
+  Subnet1:
+    Type: AWS::EC2::Subnet::Id
+  Subnet2:
+    Type: AWS::EC2::Subnet::Id
+  ImageURI:
+    Type: String
+  TaskRoleArn:
+    Type: String
+  EnvironmentName:
+    Type: String 
+Transform:
+  - AWS::CodeDeployBlueGreen
+Hooks:
+  CodeDeployBlueGreenHook:
+    Properties:
+      TrafficRoutingConfig:
+        Type: AllAtOnce
+      ServiceRole: arn:aws:iam::502937263541:role/ecsTaskExecutionRole
+      Applications:
+        - Target:
+            Type: AWS::ECS::Service
+            LogicalID: ECSService
+          ECSAttributes:
+            TaskDefinitions:
+              - TaskDefinition
+              - GreenTaskDefinition
+            TaskSets:
+              - TaskSet
+              - GreenTaskSet
+            TrafficRouting:
+              ProdTrafficRoute:
+                Type: AWS::ElasticLoadBalancingV2::Listener
+                LogicalID: LoadBalancerListener
+              TargetGroups:
+                - DefaultTargetGroup
+                - ReplacementTargetGroup
+    Type: AWS::CodeDeploy::BlueGreen
+Resources:
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties: 
+      CapacityProviders: 
+        - FARGATE
+      ClusterName: liamsdemoCluster
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn: ECSCluster
+    Properties:
+      ServiceName: liamsdemoService
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+      DesiredCount: 2
+      Cluster: !Ref ECSCluster
+      DeploymentController:
+        Type: EXTERNAL
+
+  TaskSet:
+    Type: AWS::ECS::TaskSet
+    DependsOn:
+      - LoadBalancerListener
+      - ECSCluster
+    Properties: 
+      Cluster: !Ref ECSCluster
+      Service: !Ref ECSService
+      TaskDefinition: !Ref TaskDefinition
+      LaunchType: FARGATE
+      Scale:
+        Unit: PERCENT
+        Value: 100
+      LoadBalancers:
+        - TargetGroupArn: !Ref DefaultTargetGroup
+          ContainerPort: 80
+          ContainerName: liamsdemoContainer
+      NetworkConfiguration:
+        AwsVpcConfiguration:
+          SecurityGroups:
+            - !GetAtt EcsSecurityGroup.GroupId
+          AssignPublicIp: ENABLED
+          Subnets:
+            - !Ref Subnet1
+            - !Ref Subnet2
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ContainerDefinitions: 
+        -
+          Name: liamsdemoContainer
+          Image: !Ref ImageURI
+          Environment:
+            - Name: ENVIRONMENT_NAME
+              Value: !Ref EnvironmentName
+          PortMappings:
+            -
+              ContainerPort: 80
+      Cpu: '512'
+      ExecutionRoleArn: arn:aws:iam::502937263541:role/ecsTaskExecutionRole
+      TaskRoleArn: !Ref TaskRoleArn
+      Memory: '1024'
+      NetworkMode: 'awsvpc'
+      Family: liamsdemoTasks
+
+  PrimaryTaskSet:
+    Type: 'AWS::ECS::PrimaryTaskSet'
+    DependsOn: ECSCluster
+    Properties:
+      Cluster: !Ref ECSCluster
+      Service: !Ref ECSService
+      TaskSetId: !GetAtt TaskSet.Id
+
+  EcsElasticLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      SecurityGroups:
+        - !Ref 'AlbSecurityGroup'
+      Subnets:
+        - !Ref Subnet1
+        - !Ref Subnet2
+      Scheme: internet-facing
+      Tags:
+        -
+          Key: 'Name'
+          Value: !Join [' ', ['ECS', !Ref ECSCluster, '-', 'ALB']]
+        -
+          Key: 'Description'
+          Value: !Join [' ', ['Created for ECS cluster', !Ref ECSCluster]]
+
+  LoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref 'EcsElasticLoadBalancer'
+      Port: '80'
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref 'DefaultTargetGroup'
+
+  EcsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ECS Allowed Ports
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        -
+          IpProtocol: 'tcp'
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+        -
+          IpProtocol: 'tcp'
+          FromPort: '1'
+          ToPort: '65535'
+          SourceSecurityGroupId: !Ref 'AlbSecurityGroup'
+      Tags:
+        -
+          Key: 'Name'
+          Value: !Join [' ', ['ECS', !Ref ECSCluster, '-', 'ECS SecurityGroup']]
+        -
+          Key: 'Description'
+          Value: !Join [' ', ['Created for ECS cluster', !Ref ECSCluster]]
+
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ELB Allowed Ports
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: 'tcp'
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+      Tags:
+        -
+          Key: 'Name'
+          Value: !Join [' ', ['ECS', !Ref ECSCluster, '-', 'ALB SecurityGroup']]
+        -
+          Key: 'Description'
+          Value: !Join [' ', ['Created for ECS cluster', !Ref ECSCluster]]
+
+  DefaultTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VPC
+      Port: '80'
+      TargetType: 'ip'
+      Protocol: HTTP
+      Tags:
+        -
+          Key: 'Name'
+          Value: !Join [' ', ['ECS', !Ref ECSCluster, '-', 'TargetGroup1']]
+        -
+          Key: 'Description'
+          Value: !Join [' ', ['Created for ECS cluster', !Ref ECSCluster]]
+
+  ReplacementTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VPC
+      Port: '80'
+      TargetType: 'ip'
+      Protocol: HTTP
+      Tags:
+        -
+          Key: 'Name'
+          Value: !Join [' ', ['ECS', !Ref ECSCluster, '-', 'TargetGroup2']]
+        -
+          Key: 'Description'
+          Value: !Join [' ', ['Created for ECS cluster', !Ref ECSCluster]]
+
+Outputs:
+  ServiceEndpoint:
+    Value: !GetAtt EcsElasticLoadBalancer.DNSName
+    Description: DNSName of Load Balancer
+  Cluster:
+    Value: !Ref ECSCluster
+    Description: ECS Cluster Name
+  Service:
+    Value: !GetAtt ECSService.Name
+    Description: ECS Service Name

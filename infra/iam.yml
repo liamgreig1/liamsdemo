@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: IAM role for ECS task's Project liamsdemo
+Resources:
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: liamsdemoTaskRole
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: liamsdemologs
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Resource: arn:aws:logs:us-east-2:502937263541:log-group:liamsdemo:*
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+        - PolicyName: liamsdemoCredentials
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Resource: arn:aws:secretsmanager:us-east-2:502937263541:secret:liamsdemo-*
+                Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+Outputs:
+  TaskRoleArn:
+    Value: !GetAtt TaskRole.Arn
+    Description: ARN of Task Role
