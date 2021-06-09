@@ -11,10 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install Dependencies
-        working-directory: ./
-        run: echo $(ls)
+        working-directory: ../
+        run: make install-dev
       - name: Run Tests
-        working-directory: ./
+        working-directory: ../
         run: make coverage
       - uses: actions/checkout@v2
         with:
