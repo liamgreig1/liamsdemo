@@ -12,7 +12,7 @@ jobs:
     steps:
       - name: Install Dependencies
         working-directory: ./
-        run: pwd
+        run: ls
       - name: Run Tests
         working-directory: ./
         run: make coverage
