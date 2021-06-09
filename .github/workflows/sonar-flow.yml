@@ -10,8 +10,8 @@ jobs:
     name: SonarCloud
     runs-on: ubuntu-latest
     steps:
-      - run: make install-dev
-      - run: make coverage
+      - run: make (cd .. && make install-dev)
+      - run: make (cd .. && make coverage)
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
