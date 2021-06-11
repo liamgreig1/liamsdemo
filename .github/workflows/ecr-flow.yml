@@ -7,7 +7,7 @@ jobs:
     - uses: actions/checkout@master
     - name: Login to ECR
       id: ecr
-      uses: liamgreig1/liamsdemo
+      uses: liamgreig1/liamsdemo@main
       with:
         access_key: ${{ secrets.AWS_ACCESS_KEY }}
         secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
