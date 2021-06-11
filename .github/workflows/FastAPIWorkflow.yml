@@ -23,7 +23,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
       id: ecr
-        uses: aws-actions/configure-aws-credentials@v1
+      uses: aws-actions/configure-aws-credentials@v1
         with:
           access_key: ${{ secrets.AWS_ACCESS_KEY }}
           secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
